@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import tamilmv
+from routers import tamilmv, piratebay
 
 # Create FastAPI app
 app = FastAPI(
@@ -8,7 +8,7 @@ app = FastAPI(
     description="API for searching and streaming movies from various sources",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Configure CORS
@@ -22,18 +22,17 @@ app.add_middleware(
 
 # Include routers
 app.include_router(tamilmv.router)
+app.include_router(piratebay.router)
+
 
 @app.get("/")
 async def root():
     return {
         "message": "Welcome to Movie Streamer API",
-        "docs": "/docs",
-        "endpoints": [
-            {"path": "/tamilmv/search", "method": "GET", "description": "Search TamilMV for movies"}
-        ]
     }
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
-    
