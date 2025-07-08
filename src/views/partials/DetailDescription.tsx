@@ -1,7 +1,16 @@
 // Interfaces
+import { useState } from 'react'
 import { IMovieDetail } from 'interfaces/IMovieDetail'
+import { IStreamingProvider, ISearchResult, IMagnetLink } from 'interfaces/IStreaming'
 // Images
 import { Dummy } from '@/assets/images'
+// Components
+import ProviderModal from 'components/ProviderModal'
+import SearchResultsModal from 'components/SearchResultsModal'
+import MagnetModal from 'components/MagnetModal'
+import LoadingSpinner from 'components/LoadingSpinner'
+// Services
+import { searchTamilMV, searchPirateBay, fetchMagnetLinks } from 'services/StreamingService'
 
 // Local interface
 interface IProps {
@@ -14,8 +23,72 @@ const DetailDescription = ({ movie }: IProps) => {
     ? movie.release_date?.split('-')[0] || movie.first_air_date?.split('-')[0]
     : ''
 
+  // Streaming state
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState<boolean>(false)
+  const [isSearchResultsModalOpen, setIsSearchResultsModalOpen] = useState<boolean>(false)
+  const [isMagnetModalOpen, setIsMagnetModalOpen] = useState<boolean>(false)
+  const [selectedProvider, setSelectedProvider] = useState<IStreamingProvider | null>(null)
+  const [searchResults, setSearchResults] = useState<ISearchResult[]>([])
+  const [magnetLinks, setMagnetLinks] = useState<IMagnetLink[]>([])
+  const [isSearching, setIsSearching] = useState<boolean>(false)
+  const [isFetchingMagnets, setIsFetchingMagnets] = useState<boolean>(false)
+
   // Error image
   const onErrorImage = (e: any) => (e.target.src = Dummy)
+
+  // Handler functions
+  const handleWatchClick = () => {
+    setIsProviderModalOpen(true)
+  }
+
+  const handleProviderSelect = async (provider: IStreamingProvider) => {
+    setSelectedProvider(provider)
+    setIsProviderModalOpen(false)
+    setIsSearching(true)
+    
+    try {
+      // Search for the movie in the selected provider
+      const movieTitle = movie.title || movie.original_title || movie.name || movie.original_name || ''
+      let results: ISearchResult[] = []
+      
+      if (provider.id === 'tamilmv') {
+        results = await searchTamilMV(movieTitle)
+      } else if (provider.id === 'piratebay') {
+        results = await searchPirateBay(movieTitle)
+      }
+      
+      setSearchResults(results)
+      setIsSearchResultsModalOpen(true)
+    } catch (error) {
+      console.error('Error searching for movie:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleSearchResultSelect = async (result: ISearchResult) => {
+    setIsSearchResultsModalOpen(false)
+    setIsFetchingMagnets(true)
+    
+    try {
+      if (selectedProvider) {
+        const magnets = await fetchMagnetLinks(result.href, selectedProvider.id)
+        setMagnetLinks(magnets)
+        setIsMagnetModalOpen(true)
+      }
+    } catch (error) {
+      console.error('Error fetching magnet links:', error)
+    } finally {
+      setIsFetchingMagnets(false)
+    }
+  }
+
+  const handleMagnetSelect = (magnet: IMagnetLink) => {
+    setIsMagnetModalOpen(false)
+    
+    // Open the magnet link in a new tab
+    window.open(magnet.magnet_link, '_blank')
+  }
 
   return (
     <>
@@ -53,10 +126,18 @@ const DetailDescription = ({ movie }: IProps) => {
 
           {/* Title, release year, language, genres, description */}
           <div className='flex flex-col mt-16 space-y-3'>
-            {/* Title */}
-            <h1 className='tracking-wide font-bold xl:text-3xl md:text-2xl text-slate-950 dark:text-slate-100'>
-              {movie.original_name || movie.original_title}
-            </h1>
+            {/* Title and Watch button */}
+            <div className="flex items-center justify-between">
+              <h1 className='tracking-wide font-bold xl:text-3xl md:text-2xl text-slate-950 dark:text-slate-100'>
+                {movie.original_name || movie.original_title}
+              </h1>
+              <button
+                onClick={handleWatchClick}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              >
+                Watch
+              </button>
+            </div>
 
             {/* Release year & language */}
             {movie.spoken_languages.length > 0 && (
@@ -85,6 +166,46 @@ const DetailDescription = ({ movie }: IProps) => {
           </div>
         </div>
       </div>
+      {/* Modals */}
+      <ProviderModal
+        isOpen={isProviderModalOpen}
+        onClose={() => setIsProviderModalOpen(false)}
+        onSelectProvider={handleProviderSelect}
+      />
+
+      {/* Loading screen for searching */}
+      {isSearching && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur z-[999999] flex items-center justify-center">
+          <div className="bg-background-light dark:bg-slate-900 p-8 rounded-xl shadow-xl flex flex-col items-center space-y-4">
+            <LoadingSpinner size="lg" />
+            <p className="text-lg font-medium text-slate-900 dark:text-slate-100">Searching for movie...</p>
+          </div>
+        </div>
+      )}
+
+      <SearchResultsModal
+        isOpen={isSearchResultsModalOpen}
+        results={searchResults}
+        onClose={() => setIsSearchResultsModalOpen(false)}
+        onSelectResult={handleSearchResultSelect}
+      />
+
+      {/* Loading screen for fetching magnet links */}
+      {isFetchingMagnets && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur z-[999999] flex items-center justify-center">
+          <div className="bg-background-light dark:bg-slate-900 p-8 rounded-xl shadow-xl flex flex-col items-center space-y-4">
+            <LoadingSpinner size="lg" />
+            <p className="text-lg font-medium text-slate-900 dark:text-slate-100">Fetching magnet links...</p>
+          </div>
+        </div>
+      )}
+
+      <MagnetModal
+        isOpen={isMagnetModalOpen}
+        magnets={magnetLinks}
+        onClose={() => setIsMagnetModalOpen(false)}
+        onSelectMagnet={handleMagnetSelect}
+      />
     </>
   )
 }
